@@ -24,6 +24,5 @@ const chefSchema = new Schema(
   }
 );
 
-// Exportamos el modelo compilado
 const Chef = model('Chef', chefSchema);
 export default Chef;
