@@ -3,7 +3,7 @@ const controller = require('../controllers/chef.controller');
 
 const router = Router();
 
-router.post('/', controller.createChef);
+router.post('/', controller.createChef); // <--- Esta línea llama al controlador
 router.get('/', controller.listChefs);
 router.get('/:id', controller.getChef);
 router.put('/:id', controller.updateChef);

@@ -1,14 +1,33 @@
+// src/routes/tournament.routes.js
+
 const { Router } = require('express');
-const controller = require('../controllers/tournament.controller');
+const {
+  createTournament,
+  listTournaments,
+  addChefToTournament,
+  getTournament,
+  updateTournament,
+  deleteTournament,
+} = require('../controllers/tournament.controller');
 
 const router = Router();
 
-router.post('/', controller.createTournament);
-router.get('/', controller.listTournaments);
+// POST /api/tournaments - Crear un nuevo torneo
+router.post('/', createTournament);
 
-router.post('/:id/enroll', controller.enrollChef);
-router.post('/:id/remove', controller.removeChef);
-router.post('/:id/start', controller.startTournament);
-router.post('/:id/finish', controller.finishTournament);
+// GET /api/tournaments - Listar todos los torneos
+router.get('/', listTournaments);
+
+// POST /api/tournaments/:id/add-chef - Añadir un chef a un torneo (debe ir antes de /:id)
+router.post('/:id/add-chef', addChefToTournament);
+
+// GET /api/tournaments/:id - Obtener un torneo por ID
+router.get('/:id', getTournament);
+
+// PUT /api/tournaments/:id - Actualizar un torneo
+router.put('/:id', updateTournament);
+
+// DELETE /api/tournaments/:id - Eliminar un torneo
+router.delete('/:id', deleteTournament);
 
 module.exports = router;

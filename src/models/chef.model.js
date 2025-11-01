@@ -1,28 +1,28 @@
-import { Schema, model } from 'mongoose';
+const { Schema, model } = require('mongoose');
 
 const chefSchema = new Schema(
   {
     name: {
       type: String,
-      required: true, // El nombre es obligatorio
-      trim: true, // Limpia espacios en blanco al inicio y final
+      required: true,
+      trim: true,
     },
     specialty: {
       type: String,
-      required: true, // La especialidad es obligatoria
+      required: true,
       trim: true,
     },
     experienceYears: {
       type: Number,
-      required: true, // Los años de experiencia son obligatorios
-      min: [0, 'Experience years must be a positive number'], // Validación mínima
+      required: true,
+      min: [0, 'Experience years must be a positive number'],
     },
   },
   {
-    timestamps: true, // Añade createdAt y updatedAt
-    versionKey: false, // Desactiva el campo __v
+    timestamps: true,
+    versionKey: false,
   }
 );
 
 const Chef = model('Chef', chefSchema);
-export default Chef;
+module.exports = Chef;
