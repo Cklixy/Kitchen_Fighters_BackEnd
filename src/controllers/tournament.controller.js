@@ -7,67 +7,87 @@ const Chef = require('../models/chef.model');
  */
 const createTournament = async (req, res) => {
   try {
-    // Debug: ver qué está llegando
-    console.log('req.body type:', typeof req.body);
-    console.log('req.body:', req.body);
-    console.log('req.headers["content-type"]:', req.headers['content-type']);
-
-    // Validar que req.body existe y es un objeto
-    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    // Validar que req.body existe
+    if (!req.body || typeof req.body !== 'object') {
       return res.status(400).json({ 
-        message: 'El cuerpo de la petición debe ser un objeto JSON válido',
-        received: req.body,
-        type: typeof req.body
+        message: 'El cuerpo de la petición debe ser un objeto JSON válido. Asegúrate de que en Postman: 1) Body → raw → JSON, 2) Headers → Content-Type: application/json'
       });
     }
 
-    // Extraemos 'name' y el nuevo campo 'inicio' del body
+    // Extraemos 'name' y el nuevo campo 'inicio'
     const { name, inicio } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: 'El nombre (name) es obligatorio' });
     }
 
-    // Verificamos si ya existe un torneo con ese nombre
-    const existingTournament = await Tournament.findOne({ name });
-    if (existingTournament) {
-      return res.status(400).json({ message: 'Ya existe un torneo con ese nombre' });
-    }
-
     // Validar y convertir la fecha de inicio si viene
     let fechaInicio = null;
     if (inicio) {
-      fechaInicio = new Date(inicio);
-      if (isNaN(fechaInicio.getTime())) {
-        return res.status(400).json({ message: 'La fecha de inicio no es válida' });
+      // Si viene como string, intentar convertirla a Date
+      if (typeof inicio === 'string') {
+        fechaInicio = new Date(inicio);
+        // Validar que la fecha sea válida
+        if (isNaN(fechaInicio.getTime())) {
+          return res.status(400).json({ 
+            message: 'La fecha de inicio no es válida. Usa formato ISO (ej: "2024-01-15T10:00:00Z")' 
+          });
+        }
+      } else if (inicio instanceof Date) {
+        // Si ya es una fecha, usarla directamente
+        fechaInicio = inicio;
+      } else {
+        return res.status(400).json({ 
+          message: 'La fecha de inicio debe ser una fecha válida' 
+        });
       }
     }
 
     // Creamos el torneo. 
-    // 'estado' se pondrá 'Pendiente' automáticamente gracias al "default" en el modelo.
+    // 'estado' se pondrá 'Pendiente' automáticamente (default en el modelo).
     const newTournament = new Tournament({
       name,
       inicio: fechaInicio
     });
 
     const savedTournament = await newTournament.save();
-    res.status(201).json(savedTournament);
+    
+    // Asegurar que la fecha se devuelva correctamente (null o ISO string)
+    const tournamentResponse = savedTournament.toObject();
+    if (tournamentResponse.inicio) {
+      tournamentResponse.inicio = savedTournament.inicio.toISOString();
+    } else {
+      tournamentResponse.inicio = null;
+    }
+    
+    res.status(201).json(tournamentResponse);
+
   } catch (error) {
-    console.error('Error al crear torneo:', error);
-    // Mejorar el mensaje de error según el tipo
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ 
-        message: 'Error de validación', 
-        errors: Object.values(error.errors).map(e => e.message) 
+    
+    // --- MANEJO DE ERRORES MEJORADO ---
+
+    // Error 1: Llave Duplicada (Nombre del torneo repetido)
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.name) {
+      return res.status(409).json({ // 409 Conflict
+        message: `El nombre del torneo '${error.keyValue.name}' ya está en uso.`,
+        error: 'Duplicate key error (E11000)'
       });
     }
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Ya existe un torneo con ese nombre' });
+
+    // Error 2: Error de Validación (ej. fecha inválida o campos faltantes)
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ // 400 Bad Request
+        message: 'Error de validación. Revisa los campos enviados.',
+        // Mongoose entrega detalles de qué campo falló (ej. 'inicio' por el formato)
+        errors: error.errors 
+      });
     }
+    
+    // Error 3: Cualquier otra cosa (Error 500)
+    console.error('Error inesperado en createTournament:', error); // Loguea el error
     res.status(500).json({ 
-      message: 'Error al crear el torneo', 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'Error interno del servidor al crear el torneo', 
+      error: error.message 
     });
   }
 };
@@ -79,7 +99,19 @@ const createTournament = async (req, res) => {
 const getTournaments = async (req, res) => {
   try {
     const tournaments = await Tournament.find().populate('participants', 'name');
-    res.status(200).json(tournaments);
+    
+    // Transformar las fechas a formato ISO para evitar "Invalid Date" en el frontend
+    const tournamentsResponse = tournaments.map(tournament => {
+      const tournamentObj = tournament.toObject();
+      if (tournamentObj.inicio) {
+        tournamentObj.inicio = tournament.inicio.toISOString();
+      } else {
+        tournamentObj.inicio = null;
+      }
+      return tournamentObj;
+    });
+    
+    res.status(200).json(tournamentsResponse);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener torneos', error: error.message });
   }
@@ -99,10 +131,11 @@ const registerChef = async (req, res) => {
       return res.status(404).json({ message: 'Torneo no encontrado' });
     }
 
-    // Validamos el estado del torneo
+    // --- LÓGICA DE ESTADO AÑADIDA ---
     if (tournament.estado !== 'Pendiente') {
       return res.status(400).json({ message: `No se puede registrar chefs. El torneo ya está '${tournament.estado}'` });
     }
+    // --- FIN DE LÓGICA DE ESTADO ---
 
     const chef = await Chef.findById(chefId);
     if (!chef) {
@@ -141,10 +174,12 @@ const submitScore = async (req, res) => {
       return res.status(404).json({ message: 'Torneo no encontrado' });
     }
 
-    // Opcional: Cambiar estado a "En Curso" si es el primer puntaje
+    // --- LÓGICA DE ESTADO AÑADIDA ---
+    // Cambiar estado a "En Curso" si es el primer puntaje
     if (tournament.estado === 'Pendiente') {
       tournament.estado = 'En Curso';
     }
+    // --- FIN DE LÓGICA DE ESTADO ---
 
     // Validar que el chef esté inscrito
     if (!tournament.participants.some(p => p.equals(chefId))) {
@@ -158,10 +193,12 @@ const submitScore = async (req, res) => {
 
     tournament.results.push({ chef: chefId, score });
     
-    // Opcional: Si todos los participantes enviaron puntaje, finalizar torneo
-    if (tournament.results.length === tournament.participants.length) {
+    // --- LÓGICA DE ESTADO AÑADIDA ---
+    // Si todos los participantes enviaron puntaje, finalizar torneo
+    if (tournament.results.length === tournament.participants.length && tournament.participants.length > 0) {
       tournament.estado = 'Finalizado';
     }
+    // --- FIN DE LÓGICA DE ESTADO ---
     
     await tournament.save();
     res.status(200).json(tournament);

@@ -43,7 +43,7 @@ const TournamentSchema = new Schema({
    * Estado actual del torneo.
    * - Pendiente: Aún no ha comenzado.
    * - En Curso: Ha comenzado pero no finalizado.
-   * - Finalizado: Ya se registraron todos los puntajes y hay un ranking.
+   * - Finalizado: Ya se registraron todos los puntajes.
    * - Cancelado: El torneo fue cancelado.
    */
   estado: {

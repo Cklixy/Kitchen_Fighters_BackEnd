@@ -18,22 +18,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Middleware de debugging (temporal)
-app.use((req, res, next) => {
-  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-    console.log('=== DEBUG REQUEST ===');
-    console.log('Method:', req.method);
-    console.log('URL:', req.url);
-    console.log('Content-Type header:', req.get('Content-Type'));
-    console.log('Body recibido:', req.body);
-    console.log('Body type:', typeof req.body);
-    console.log('Body is array?', Array.isArray(req.body));
-    console.log('====================');
-  }
-  next();
-});
-
-// Logger (después de los parsers)
+// Logger
 app.use(logger);
 
 // Routes
