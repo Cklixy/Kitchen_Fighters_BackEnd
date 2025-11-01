@@ -1,25 +1,136 @@
-const Chef = require('../models/chef.model');
+// src/controllers/chef.controller.js
 
-// --- Crear un nuevo Chef (POST) ---
+const Chef = require('../models/chef.model');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+// --- Crear un nuevo Chef (POST /) ---
 const createChef = async (req, res, next) => {
   try {
-    const { name, specialty, experienceYears } = req.body;
+    const { name, specialty, experienceYears, email, password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        message: 'La contraseña es obligatoria y debe tener al menos 6 caracteres',
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const newChef = new Chef({
       name,
       specialty,
       experienceYears,
+      email,
+      password: hashedPassword,
     });
+
     const savedChef = await newChef.save();
-    res.status(201).json(savedChef);
+
+    const chefResponse = savedChef.toObject();
+    delete chefResponse.password;
+
+    res.status(201).json(chefResponse);
   } catch (err) {
-    next(err); // Pasa el error al manejador de errores
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      return res.status(409).json({
+        message: `El correo electrónico '${err.keyValue.email}' ya está en uso.`,
+      });
+    }
+    next(err);
   }
 };
 
-// --- Listar todos los Chefs (GET) ---
+// --- Iniciar Sesión (Login) (POST /login) ---
+const loginChef = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Por favor ingrese correo y contraseña' });
+    }
+
+    const chef = await Chef.findOne({ email }).select('+password');
+
+    if (!chef) {
+      return res.status(401).json({ message: 'Credenciales inválidas' });
+    }
+
+    const isMatch = await bcrypt.compare(password, chef.password);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Credenciales inválidas' });
+    }
+
+    const payload = {
+      id: chef._id,
+      name: chef.name
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: '1h'
+    });
+
+    const chefResponse = chef.toObject();
+    delete chefResponse.password;
+
+    res.status(200).json({
+      token,
+      chef: chefResponse
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+// --- ¡NUEVA FUNCIÓN! Actualizar Perfil (PUT /profile) ---
+const updateMyProfile = async (req, res, next) => {
+  try {
+    // 1. Buscamos al chef usando el ID que nuestro 'authMiddleware' puso en 'req.chef'
+    const chef = await Chef.findById(req.chef.id);
+
+    if (!chef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
+
+    // 2. Actualizamos los campos que vengan en la petición
+    if (req.body.description) {
+      chef.description = req.body.description;
+    }
+    if (req.body.specialty) {
+      chef.specialty = req.body.specialty;
+    }
+    if (req.body.experienceYears) {
+      chef.experienceYears = req.body.experienceYears;
+    }
+
+    // 3. Si 'multer' procesó un archivo, 'req.file' existirá
+    if (req.file) {
+      // Guardamos la ruta de la imagen (ej: "uploads/chef-12345.jpg")
+      // Reemplazamos '\' por '/' para compatibilidad web
+      chef.profileImageUrl = req.file.path.replace(/\\/g, '/');
+    }
+
+    const updatedChef = await chef.save();
+
+    // 4. Devolvemos el chef actualizado (sin contraseña)
+    const chefResponse = updatedChef.toObject();
+    delete chefResponse.password;
+
+    res.status(200).json(chefResponse);
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+// --- Listar todos los Chefs (GET /) ---
 const listChefs = async (req, res, next) => {
   try {
-    const chefs = await Chef.find();
+    const chefs = await Chef.find().select('-password -email');
     res.status(200).json(chefs);
   } catch (err) {
     next(err);
@@ -27,34 +138,41 @@ const listChefs = async (req, res, next) => {
 };
 
 // --- Obtener un Chef por ID (GET /:id) ---
-// ESTA ES LA FUNCIÓN QUE FALTABA
 const getChef = async (req, res, next) => {
   try {
     const { id } = req.params;
-    // Usamos findById para buscar un chef por su ID
-    const chef = await Chef.findById(id);
+    const chef = await Chef.findById(id).select('-password');
 
-    // Si el chef no existe, devolvemos un 404
     if (!chef) {
       return res.status(404).json({ message: 'Chef no encontrado' });
     }
 
-    // Si se encuentra, se devuelve el chef
     res.status(200).json(chef);
   } catch (err) {
-    // Si el ID tiene un formato incorrecto o hay otro error, pasa al manejador de errores
     next(err);
   }
 };
 
-// --- Actualizar un Chef (PUT /:id) ---
+// --- Actualizar un Chef (PUT /:id) (Esta es para un Admin, la dejamos) ---
 const updateChef = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updatedChef = await Chef.findByIdAndUpdate(id, req.body, {
-      new: true, // Devuelve el documento actualizado
-      runValidators: true, // Ejecuta las validaciones del schema
-    });
+    const { password, ...updates } = req.body;
+
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({
+          message: 'La contraseña debe tener al menos 6 caracteres',
+        });
+      }
+      const salt = await bcrypt.genSalt(10);
+      updates.password = await bcrypt.hash(password, salt);
+    }
+
+    const updatedChef = await Chef.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true,
+    }).select('-password');
 
     if (!updatedChef) {
       return res.status(404).json({ message: 'Chef no encontrado' });
@@ -62,6 +180,11 @@ const updateChef = async (req, res, next) => {
 
     res.status(200).json(updatedChef);
   } catch (err) {
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      return res.status(409).json({
+        message: `El correo electrónico '${err.keyValue.email}' ya está en uso.`,
+      });
+    }
     next(err);
   }
 };
@@ -75,19 +198,20 @@ const deleteChef = async (req, res, next) => {
     if (!deletedChef) {
       return res.status(404).json({ message: 'Chef no encontrado' });
     }
-
-    // 204 No Content es una respuesta común para DELETE exitoso
+    
     res.status(204).send();
   } catch (err) {
     next(err);
   }
 };
 
-// --- Exportaciones (CON 'getChef' AÑADIDO) ---
+// --- Exportaciones ---
 module.exports = {
   createChef,
+  loginChef,
+  updateMyProfile, // <--- AÑADIMOS LA NUEVA FUNCIÓN
   listChefs,
-  getChef, // <--- AÑADIDO
+  getChef,
   updateChef,
   deleteChef,
 };

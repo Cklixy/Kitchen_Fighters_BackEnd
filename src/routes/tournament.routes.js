@@ -1,29 +1,32 @@
-// src/routes/tournament.routes.js
-
 const { Router } = require('express');
 const {
   createTournament,
   getTournaments,
+  getTournamentById,
   registerChef,
   submitScore,
   getRanking,
 } = require('../controllers/tournament.controller');
 
+// 1. Importamos el middleware de autenticación que creamos
+const authMiddleware = require('../middleware/auth.middleware');
+
 const router = Router();
 
-// POST /api/tournaments - Crear un nuevo torneo
+// --- Rutas Públicas ---
 router.post('/', createTournament);
-
-// GET /api/tournaments - Listar todos los torneos
 router.get('/', getTournaments);
 
-// POST /api/tournaments/:id/register - Registrar un chef en un torneo
-router.post('/:id/register', registerChef);
+// --- Rutas Protegidas (Requieren Token) ---
 
-// POST /api/tournaments/:id/submit - Enviar puntaje de un chef
-router.post('/:id/submit', submitScore);
+// 2. Añadimos el 'authMiddleware' a la ruta de registro.
+// Ahora, solo chefs con sesión iniciada pueden usar esta ruta.
+router.post('/:id/register', authMiddleware, registerChef);
 
-// GET /api/tournaments/:id/ranking - Obtener el ranking de un torneo
+router.post('/:id/submit', authMiddleware, submitScore);
+
+// --- Rutas Públicas (con ID) ---
 router.get('/:id/ranking', getRanking);
+router.get('/:id', getTournamentById);
 
 module.exports = router;
