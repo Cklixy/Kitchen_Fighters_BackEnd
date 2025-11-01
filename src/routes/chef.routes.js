@@ -22,6 +22,9 @@ router.get('/', controller.listChefs);
 
 // --- RUTAS PROTEGIDAS (Requieren token) ---
 
+// GET /api/chefs/me (Obtener MI perfil actual)
+router.get('/me', authMiddleware, controller.getMyProfile);
+
 // PUT /api/chefs/profile (Actualizar MI perfil)
 // 1. Pasa por 'authMiddleware' para verificar el token
 // 2. Pasa por 'upload.single('profileImage')' para procesar la imagen

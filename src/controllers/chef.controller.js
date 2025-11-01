@@ -74,12 +74,40 @@ const loginChef = async (req, res, next) => {
 
     const chefResponse = chef.toObject();
     delete chefResponse.password;
+    
+    // Asegurar que el campo role esté presente (usar default si no existe)
+    if (!chefResponse.role) {
+      chefResponse.role = 'user';
+    }
 
     res.status(200).json({
       token,
       chef: chefResponse
     });
 
+  } catch (err) {
+    next(err);
+  }
+};
+
+// --- Obtener mi perfil actual (GET /me) ---
+const getMyProfile = async (req, res, next) => {
+  try {
+    // Obtener el chef completo desde la BD para asegurar todos los campos
+    const chef = await Chef.findById(req.chef._id || req.chef.id);
+    
+    if (!chef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
+
+    // Asegurar que el campo role esté presente (usar default si no existe)
+    const chefResponse = chef.toObject();
+    delete chefResponse.password;
+    if (!chefResponse.role) {
+      chefResponse.role = 'user';
+    }
+    
+    res.status(200).json(chefResponse);
   } catch (err) {
     next(err);
   }
@@ -147,7 +175,13 @@ const getChef = async (req, res, next) => {
       return res.status(404).json({ message: 'Chef no encontrado' });
     }
 
-    res.status(200).json(chef);
+    // Asegurar que el campo role esté presente (usar default si no existe)
+    const chefResponse = chef.toObject();
+    if (!chefResponse.role) {
+      chefResponse.role = 'user';
+    }
+
+    res.status(200).json(chefResponse);
   } catch (err) {
     next(err);
   }
@@ -209,7 +243,8 @@ const deleteChef = async (req, res, next) => {
 module.exports = {
   createChef,
   loginChef,
-  updateMyProfile, // <--- AÑADIMOS LA NUEVA FUNCIÓN
+  getMyProfile, // <--- Obtener mi perfil actual
+  updateMyProfile,
   listChefs,
   getChef,
   updateChef,

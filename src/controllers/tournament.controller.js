@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Tournament = require('../models/tournament.model');
 const Chef = require('../models/chef.model');
 
@@ -95,6 +96,13 @@ const getTournamentById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Validar que el ID sea un ObjectId válido
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido' 
+      });
+    }
+
     const tournament = await Tournament.findById(id)
       .populate('participants', 'name specialty')
       .populate({
@@ -136,6 +144,13 @@ const getTournamentById = async (req, res, next) => {
 const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'next'!
   try {
     const { id } = req.params;
+
+    // Validar que el ID sea un ObjectId válido
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido' 
+      });
+    }
     
     // --- ¡CAMBIO IMPORTANTE! ---
     // Ya no lo leemos del 'body'. Lo leemos del 'req.chef' 
@@ -185,6 +200,14 @@ const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'n
 const submitScore = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // Validar que el ID sea un ObjectId válido
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido' 
+      });
+    }
+
     const { chefId, score } = req.body; // Aquí mantenemos el body, asumiendo que un admin puede poner notas
 
     if (score === undefined || score === null) {
@@ -228,6 +251,14 @@ const submitScore = async (req, res, next) => {
 const getRanking = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // Validar que el ID sea un ObjectId válido
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido' 
+      });
+    }
+
     const tournament = await Tournament.findById(id).populate('results.chef', 'name');
 
     if (!tournament) {

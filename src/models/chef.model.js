@@ -45,7 +45,17 @@ const chefSchema = new Schema(
     profileImageUrl: {
       type: String,
       default: '' // Guardaremos la RUTA a la imagen
+    },
+
+    // --- ¡¡CÓDIGO AÑADIDO!! ---
+    // Este es el campo nuevo para los roles de administrador
+    role: {
+      type: String,
+      enum: ['user', 'admin'], // Solo permite estos dos valores
+      default: 'user',          // Por defecto, todos son 'user'
+      required: false           // No requerido para documentos antiguos
     }
+    // --- FIN DEL CÓDIGO AÑADIDO ---
   },
   {
     timestamps: true,
