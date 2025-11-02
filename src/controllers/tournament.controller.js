@@ -141,37 +141,26 @@ const getTournamentById = async (req, res, next) => {
  * @desc Registra un chef en un torneo.
  * @route POST /api/tournaments/:id/register
  */
-const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'next'!
+const registerChef = async (req, res, next) => { 
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
     if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ 
         message: 'ID de torneo inválido' 
       });
     }
     
-    // --- ¡CAMBIO IMPORTANTE! ---
-    // Ya no lo leemos del 'body'. Lo leemos del 'req.chef' 
-    // que fue añadido por el 'authMiddleware'.
     const chefId = req.chef.id; 
-    // --- FIN DEL CAMBIO ---
 
     const tournament = await Tournament.findById(id);
     if (!tournament) {
       return res.status(404).json({ message: 'Torneo no encontrado' });
     }
 
-    // #################   AQUÍ ESTÁ LA CORRECCIÓN   #################
-    // El frontend intenta inscribir cuando el estado es 'Inscripción',
-    // pero tu lógica anterior solo permitía 'Pendiente'.
-    // Cambiamos 'Pendiente' por 'Inscripción'.
     if (tournament.estado !== 'Inscripción') {
       return res.status(400).json({ message: `No se puede registrar. El torneo está en estado '${tournament.estado}', no en 'Inscripción'.` });
     }
-    // #################   FIN DE LA CORRECCIÓN   #################
-
 
     const chef = await Chef.findById(chefId);
     if (!chef) {
@@ -185,7 +174,6 @@ const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'n
     tournament.participants.push(chefId);
     await tournament.save();
 
-    // Devolvemos el torneo actualizado y poblado
     const updatedTournament = await Tournament.findById(id)
       .populate('participants', 'name specialty')
       .populate({
@@ -199,6 +187,60 @@ const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'n
   }
 };
 
+// --- NUEVA FUNCIÓN ---
+/**
+ * @desc Anula la inscripción de un chef en un torneo.
+ * @route POST /api/tournaments/:id/unregister
+ */
+const unregisterChef = async (req, res, next) => {
+  try {
+    const { id } = req.params; // ID del torneo
+
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido' 
+      });
+    }
+    
+    const chefId = req.chef.id; // ID del chef (viene del authMiddleware)
+
+    const tournament = await Tournament.findById(id);
+    if (!tournament) {
+      return res.status(404).json({ message: 'Torneo no encontrado' });
+    }
+
+    // Solo se puede anular la inscripción si el torneo está en 'Inscripción'
+    if (tournament.estado !== 'Inscripción') {
+      return res.status(400).json({ 
+        message: `No se puede anular la inscripción. El torneo está en estado '${tournament.estado}'.` 
+      });
+    }
+
+    // Verificar si el chef está realmente inscrito
+    if (!tournament.participants.some(p => p.equals(chefId))) {
+      return res.status(400).json({ message: 'No estás inscrito en este torneo' });
+    }
+
+    // Remover al chef de la lista de participantes
+    tournament.participants.pull(chefId);
+    await tournament.save();
+
+    // Devolver el torneo actualizado y poblado
+    const updatedTournament = await Tournament.findById(id)
+      .populate('participants', 'name specialty')
+      .populate({
+        path: 'results',
+        populate: { path: 'chef', select: 'name specialty' }
+      });
+
+    res.status(200).json(updatedTournament);
+  } catch (error) {
+    next(error);
+  }
+};
+// --- FIN DE NUEVA FUNCIÓN ---
+
+
 /**
  * @desc Envía el puntaje de un chef para un torneo.
  * @route POST /api/tournaments/:id/submit
@@ -207,14 +249,13 @@ const submitScore = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
     if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ 
         message: 'ID de torneo inválido' 
       });
     }
 
-    const { chefId, score } = req.body; // Aquí mantenemos el body, asumiendo que un admin puede poner notas
+    const { chefId, score } = req.body; 
 
     if (score === undefined || score === null) {
       return res.status(400).json({ message: 'El puntaje (score) es obligatorio' });
@@ -258,7 +299,6 @@ const getRanking = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
     if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ 
         message: 'ID de torneo inválido' 
@@ -284,6 +324,7 @@ module.exports = {
   getTournaments,
   getTournamentById,
   registerChef,
+  unregisterChef, // <-- Asegúrate de exportar la nueva función
   submitScore,
   getRanking
 };
