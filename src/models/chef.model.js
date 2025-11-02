@@ -1,4 +1,4 @@
-// src/models/chef.model.js
+// En: src/models/chef.model.js
 
 const { Schema, model } = require('mongoose');
 
@@ -35,8 +35,6 @@ const chefSchema = new Schema(
       required: [true, 'La contraseña es obligatoria'],
       minlength: [6, 'La contraseña debe tener al menos 6 caracteres'],
     },
-
-    // --- CAMPOS NUEVOS ---
     description: {
       type: String,
       trim: true,
@@ -44,18 +42,25 @@ const chefSchema = new Schema(
     },
     profileImageUrl: {
       type: String,
-      default: '' // Guardaremos la RUTA a la imagen
+      default: ''
     },
-
-    // --- ¡¡CÓDIGO AÑADIDO!! ---
-    // Este es el campo nuevo para los roles de administrador
     role: {
       type: String,
-      enum: ['user', 'admin'], // Solo permite estos dos valores
-      default: 'user',          // Por defecto, todos son 'user'
-      required: false           // No requerido para documentos antiguos
+      enum: ['user', 'admin'],
+      default: 'user',
+      required: false
+    },
+
+    // --- ¡¡INICIO DE CÓDIGO AÑADIDO!! ---
+    resetPasswordToken: {
+      type: String,
+      required: false
+    },
+    resetPasswordExpires: {
+      type: Date,
+      required: false
     }
-    // --- FIN DEL CÓDIGO AÑADIDO ---
+    // --- FIN DE CÓDIGO AÑADIDO ---
   },
   {
     timestamps: true,

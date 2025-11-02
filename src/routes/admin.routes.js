@@ -10,26 +10,26 @@ const router = Router();
 
 // Un controlador de ejemplo para el dashboard
 const getAdminDashboardData = async (req, res, next) => {
-  try {
-    // Como pasamos por checkAdmin, aquí estamos seguros de que req.chef.role es 'admin'
-    res.json({
-      message: `¡Bienvenido al dashboard de admin, ${req.chef.name}!`,
-      secretData: {
-        totalUsuarios: 150, // (Obviamente, aquí harías una consulta a la BD)
-        torneosPendientes: 5 
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
+  try {
+    // Como pasamos por checkAdmin, aquí estamos seguros de que req.chef.role es 'admin'
+    res.json({
+      message: `¡Bienvenido al dashboard de admin, ${req.chef.name}!`,
+      secretData: {
+        totalUsuarios: 150, // (Obviamente, aquí harías una consulta a la BD)
+        torneosPendientes: 5 
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // --- Ruta de ejemplo para el Admin Dashboard ---
 router.get(
-  '/dashboard', 
-  authMiddleware,
-  checkAdmin,
-  getAdminDashboardData
+  '/dashboard', 
+  authMiddleware,
+  checkAdmin,
+  getAdminDashboardData
 );
 
 // --- Rutas para gestión de CHEFS (usuarios) ---
@@ -42,6 +42,11 @@ router.put('/chefs/:id', authMiddleware, checkAdmin, adminController.setChefRole
 // --- Rutas para gestión de TORNEOS ---
 // GET /api/admin/tournaments - Listar todos los torneos
 router.get('/tournaments', authMiddleware, checkAdmin, adminController.getTournaments);
+
+// --- ¡¡NUEVA RUTA AÑADIDA!! ---
+// POST /api/admin/tournaments - Crear un nuevo torneo
+router.post('/tournaments', authMiddleware, checkAdmin, adminController.createTournament);
+// --- FIN DE RUTA AÑADIDA ---
 
 // DELETE /api/admin/tournaments/:id - Eliminar un torneo
 router.delete('/tournaments/:id', authMiddleware, checkAdmin, adminController.deleteTournament);

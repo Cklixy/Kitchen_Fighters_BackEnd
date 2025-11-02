@@ -1,3 +1,4 @@
+// En: src/models/tournament.model.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -24,14 +25,26 @@ const TournamentSchema = new Schema({
     trim: true,
     unique: true
   },
+
+  // --- ¡¡CAMPOS AÑADIDOS!! ---
+  description: {
+    type: String,
+    trim: true,
+    default: 'No hay descripción para este torneo.'
+  },
+  maxParticipants: {
+    type: Number,
+    min: 2,
+    default: 16 // O un valor por defecto que prefieras
+  },
+  // --- FIN DE CAMPOS AÑADIDOS ---
+
   participants: [{
     type: Schema.Types.ObjectId,
     ref: 'Chef'
   }],
   results: [ResultSchema],
 
-  // --- CAMPOS NUEVOS AÑADIDOS ---
-  
   /**
    * Fecha y hora de inicio del torneo.
    */
@@ -41,10 +54,6 @@ const TournamentSchema = new Schema({
 
   /**
    * Estado actual del torneo.
-   * - Pendiente: Aún no ha comenzado.
-   * - En Curso: Ha comenzado pero no finalizado.
-   * - Finalizado: Ya se registraron todos los puntajes.
-   * - Cancelado: El torneo fue cancelado.
    */
   estado: {
     type: String,
@@ -52,8 +61,6 @@ const TournamentSchema = new Schema({
     default: 'Pendiente'
   }
   
-  // --- FIN DE CAMPOS NUEVOS ---
-
 }, {
   timestamps: true, // Añade createdAt y updatedAt automáticamente
   versionKey: false
