@@ -1,4 +1,4 @@
-// En: src/models/tournament.model.js
+// src/models/tournament.model.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -15,7 +15,7 @@ const ResultSchema = new Schema({
     min: 0,
     max: 100
   }
-}, { _id: false }); // _id: false para no crear IDs para cada resultado
+}, { _id: false }); 
 
 // --- ESQUEMA PRINCIPAL DEL TORNEO ---
 const TournamentSchema = new Schema({
@@ -25,8 +25,7 @@ const TournamentSchema = new Schema({
     trim: true,
     unique: true
   },
-
-  // --- ¡¡CAMPOS AÑADIDOS!! ---
+  
   description: {
     type: String,
     trim: true,
@@ -35,10 +34,12 @@ const TournamentSchema = new Schema({
   maxParticipants: {
     type: Number,
     min: 2,
-    default: 16 // O un valor por defecto que prefieras
+    default: 16
   },
-  // --- FIN DE CAMPOS AÑADIDOS ---
-
+  imageUrl: {
+    type: String,
+    default: ''
+  },
   participants: [{
     type: Schema.Types.ObjectId,
     ref: 'Chef'
@@ -57,10 +58,9 @@ const TournamentSchema = new Schema({
    */
   estado: {
     type: String,
-    enum: ['Pendiente', 'En Curso', 'Finalizado', 'Cancelado'],
-    default: 'Pendiente'
-  }
-  
+    enum: ['Pendiente', 'Inscripción', 'En Curso', 'Finalizado', 'Cancelado', 'Aplazado'],    
+    default: 'Inscripción'
+  }  
 }, {
   timestamps: true, // Añade createdAt y updatedAt automáticamente
   versionKey: false

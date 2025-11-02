@@ -51,6 +51,24 @@ const setChefRole = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc Elimina un chef (usuario)
+ * @route DELETE /api/admin/chefs/:id
+ * @access Admin
+ */
+const deleteChef = async (req, res, next) => {
+  try {
+    const chef = await Chef.findByIdAndDelete(req.params.id);
+    if (!chef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
+    res.json({ message: `Chef '${chef.name}' eliminado exitosamente`, id: req.params.id });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 // --- GESTIÓN DE TORNEOS ---
 
 /**
@@ -61,8 +79,8 @@ const setChefRole = async (req, res, next) => {
 const getTournaments = async (req, res, next) => {
   try {
     const tournaments = await Tournament.find()
-      .populate('participants', 'name specialty') // <-- Popula participantes
-      .populate({ // <-- Popula chefs dentro de resultados
+      .populate('participants', 'name specialty') 
+      .populate({ 
         path: 'results',
         populate: {
           path: 'chef',
@@ -115,10 +133,14 @@ const deleteTournament = async (req, res, next) => {
  */
 const createTournament = async (req, res, next) => {
   try {
-    const { name, startDate, description, maxParticipants } = req.body;
+    const { name, startDate, description, maxParticipants, estado } = req.body;
+    
     if (!name || !startDate || !maxParticipants) {
       return res.status(400).json({ message: 'Nombre, fecha de inicio y participantes máximos son requeridos' });
     }
+
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : '';
+
     const parts = startDate.split('-');
     if (parts.length !== 3) {
       return res.status(400).json({ message: 'Formato de fecha inválido. Usar YYYY-MM-DD' });
@@ -130,13 +152,18 @@ const createTournament = async (req, res, next) => {
     if (isNaN(correctedDate.getTime())) {
       return res.status(400).json({ message: 'La fecha de inicio proporcionada es inválida.' });
     }
+
     const newTournament = new Tournament({
       name,
       inicio: correctedDate,
       description,
-      maxParticipants
+      maxParticipants,
+      imageUrl: imageUrl,
+      estado: estado || 'Pendiente' // <-- ¡¡MODIFICADO!!
     });
+
     const savedTournament = await newTournament.save();
+    
     const tournamentObj = savedTournament.toObject();
     if (tournamentObj.inicio) {
        tournamentObj.startDate = new Date(tournamentObj.inicio).toISOString();
@@ -164,10 +191,13 @@ const createTournament = async (req, res, next) => {
  */
 const updateTournament = async (req, res, next) => {
   try {
-    const { name, description, startDate } = req.body;
+    const { name, description, startDate, estado } = req.body;
     const updateData = {}; 
+
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
+    if (estado !== undefined) updateData.estado = estado; 
+
     if (startDate !== undefined) {
       const parts = startDate.split('-');
       if (parts.length !== 3) return res.status(400).json({ message: 'Formato de fecha inválido. Usar YYYY-MM-DD' });
@@ -176,15 +206,18 @@ const updateTournament = async (req, res, next) => {
       if (isNaN(correctedDate.getTime())) return res.status(400).json({ message: 'La fecha de inicio proporcionada es inválida.' });
       updateData.inicio = correctedDate;
     }
+
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ message: 'No se enviaron datos para actualizar.' });
     }
+
     const updatedTournament = await Tournament.findByIdAndUpdate(
       req.params.id,
       { $set: updateData }, 
       { new: true, runValidators: true } 
     );
     if (!updatedTournament) return res.status(404).json({ message: 'Torneo no encontrado' });
+
     const tournamentObj = updatedTournament.toObject();
     if (tournamentObj.inicio) {
        tournamentObj.startDate = new Date(tournamentObj.inicio).toISOString();
@@ -203,25 +236,6 @@ const updateTournament = async (req, res, next) => {
 };
 
 /**
- * @desc Elimina un chef (usuario)
- * @route DELETE /api/admin/chefs/:id
- * @access Admin
- */
-const deleteChef = async (req, res, next) => {
-  try {
-    const chef = await Chef.findByIdAndDelete(req.params.id);
-    if (!chef) {
-      return res.status(404).json({ message: 'Chef no encontrado' });
-    }
-    res.json({ message: `Chef '${chef.name}' eliminado exitosamente`, id: req.params.id });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// --- (¡¡AÑADIDO!!) GESTIÓN DE RESULTADOS ---
-
-/**
  * @desc Añade o actualiza los resultados de un torneo
  * @route PUT /api/admin/tournaments/:id/results
  * @access Admin
@@ -229,7 +243,7 @@ const deleteChef = async (req, res, next) => {
 const updateTournamentResults = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { results } = req.body; // Espera un array: [{ chef: 'chefId', score: 95 }, ...]
+    const { results } = req.body; 
 
     if (!Array.isArray(results)) {
       return res.status(400).json({ message: 'El campo "results" debe ser un array.' });
@@ -243,7 +257,6 @@ const updateTournamentResults = async (req, res, next) => {
     const participantIds = tournament.participants.map(p => p.toString());
     const validatedResults = [];
 
-    // Validar cada resultado
     for (const result of results) {
       if (!result.chef || typeof result.score !== 'number') {
         return res.status(400).json({ message: 'Cada resultado debe tener un "chef" (ID) y un "score" (numérico).' });
@@ -263,11 +276,9 @@ const updateTournamentResults = async (req, res, next) => {
       });
     }
 
-    // Reemplazar los resultados antiguos con los nuevos
     tournament.results = validatedResults;
     await tournament.save();
     
-    // Devolver el torneo actualizado y populado (como lo hace getTournaments)
     const populatedTournament = await Tournament.findById(id)
       .populate('participants', 'name specialty')
       .populate({
@@ -291,12 +302,27 @@ const updateTournamentResults = async (req, res, next) => {
 
 
 // --- FUNCIONES ADICIONALES (ya existentes) ---
-const changeUserRole = async (req, res, next) => { /* ... (código existente) ... */ };
-const getAllUsers = async (req, res, next) => { /* ... (código existente) ... */ };
-const getUserById = async (req, res, next) => { /* ... (código existente) ... */ };
-
-// (Copiar y pegar las funciones changeUserRole, getAllUsers, y getUserById que ya tenías aquí)
-// ...
+const changeUserRole = async (req, res, next) => { 
+  return setChefRole(req, res, next);
+};
+const getAllUsers = async (req, res, next) => {
+  return getChefs(req, res, next);
+};
+const getUserById = async (req, res, next) => {
+  try {
+    const chef = await Chef.findById(req.params.id).select('-password');
+    if (!chef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
+    const chefObj = chef.toObject();
+    if (!chefObj.role) {
+      chefObj.role = 'user';
+    }
+    res.status(200).json(chefObj);
+  } catch (error) {
+    next(error);
+  }
+};
 
 module.exports = {
   getChefs,
@@ -309,5 +335,5 @@ module.exports = {
   changeUserRole,
   getAllUsers,
   getUserById,
-  updateTournamentResults // <-- ¡¡AÑADIDO A EXPORTS!!
+  updateTournamentResults
 };

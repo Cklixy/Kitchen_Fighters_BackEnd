@@ -1,5 +1,3 @@
-// En: src/models/chef.model.js
-
 const { Schema, model } = require('mongoose');
 
 const chefSchema = new Schema(
@@ -48,19 +46,13 @@ const chefSchema = new Schema(
       type: String,
       enum: ['user', 'admin'],
       default: 'user',
-      required: false
     },
-
-    // --- ¡¡INICIO DE CÓDIGO AÑADIDO!! ---
     resetPasswordToken: {
       type: String,
-      required: false
     },
     resetPasswordExpires: {
       type: Date,
-      required: false
     }
-    // --- FIN DE CÓDIGO AÑADIDO ---
   },
   {
     timestamps: true,

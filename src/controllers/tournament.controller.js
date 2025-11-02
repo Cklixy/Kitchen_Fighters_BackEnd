@@ -3,6 +3,26 @@ const Tournament = require('../models/tournament.model');
 const Chef = require('../models/chef.model');
 
 /**
+ * Valida si un ID es un ObjectId válido de MongoDB
+ */
+const isValidObjectId = (id) => {
+  return id && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id);
+};
+
+/**
+ * Transforma la fecha del torneo a formato ISO string o null
+ */
+const formatTournamentDate = (tournamentObj) => {
+  const dateKey = tournamentObj.startDate ? 'startDate' : 'inicio';
+  if (tournamentObj[dateKey]) {
+    tournamentObj[dateKey] = new Date(tournamentObj[dateKey]).toISOString();
+  } else {
+    tournamentObj[dateKey] = null;
+  }
+  return tournamentObj;
+};
+
+/**
  * @desc Crea un nuevo torneo.
  * @route POST /api/tournaments
  */
@@ -36,13 +56,7 @@ const createTournament = async (req, res, next) => {
     });
 
     const savedTournament = await newTournament.save();
-    
-    const tournamentResponse = savedTournament.toObject();
-    if (tournamentResponse.inicio) {
-      tournamentResponse.inicio = savedTournament.inicio.toISOString();
-    } else {
-      tournamentResponse.inicio = null;
-    }
+    const tournamentResponse = formatTournamentDate(savedTournament.toObject());
     
     res.status(201).json(tournamentResponse);
 
@@ -71,15 +85,7 @@ const getTournaments = async (req, res, next) => {
     const tournaments = await Tournament.find().populate('participants', 'name');
     
     const tournamentsResponse = tournaments.map(tournament => {
-      const tournamentObj = tournament.toObject();
-      const dateKey = tournamentObj.startDate ? 'startDate' : 'inicio';
-      
-      if (tournamentObj[dateKey]) {
-         tournamentObj[dateKey] = new Date(tournamentObj[dateKey]).toISOString();
-      } else {
-         tournamentObj[dateKey] = null;
-      }
-      return tournamentObj;
+      return formatTournamentDate(tournament.toObject());
     });
     
     res.status(200).json(tournamentsResponse);
@@ -96,8 +102,7 @@ const getTournamentById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ 
         message: 'ID de torneo inválido' 
       });
@@ -117,13 +122,7 @@ const getTournamentById = async (req, res, next) => {
       return res.status(404).json({ message: 'Torneo no encontrado' });
     }
 
-    const tournamentObj = tournament.toObject();
-    const dateKey = tournamentObj.startDate ? 'startDate' : 'inicio';
-    if (tournamentObj[dateKey]) {
-      tournamentObj[dateKey] = new Date(tournamentObj[dateKey]).toISOString();
-    } else {
-      tournamentObj[dateKey] = null;
-    }
+    const tournamentObj = formatTournamentDate(tournament.toObject());
     
     if (tournamentObj.inicio) {
       tournamentObj.startDate = tournamentObj.inicio;
@@ -136,27 +135,27 @@ const getTournamentById = async (req, res, next) => {
   }
 };
 
-
 /**
  * @desc Registra un chef en un torneo.
  * @route POST /api/tournaments/:id/register
  */
-const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'next'!
+const registerChef = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ 
         message: 'ID de torneo inválido' 
       });
     }
     
-    // --- ¡CAMBIO IMPORTANTE! ---
-    // Ya no lo leemos del 'body'. Lo leemos del 'req.chef' 
-    // que fue añadido por el 'authMiddleware'.
-    const chefId = req.chef.id; 
-    // --- FIN DEL CAMBIO ---
+    const chefId = req.chef?.id || req.body?.chefId;
+
+    if (!chefId) {
+      return res.status(400).json({ 
+        message: 'ID de chef requerido' 
+      });
+    }
 
     const tournament = await Tournament.findById(id);
     if (!tournament) {
@@ -164,7 +163,9 @@ const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'n
     }
 
     if (tournament.estado !== 'Pendiente') {
-      return res.status(400).json({ message: `No se puede registrar chefs. El torneo ya está '${tournament.estado}'` });
+      return res.status(400).json({ 
+        message: `No se puede registrar chefs. El torneo ya está '${tournament.estado}'` 
+      });
     }
 
     const chef = await Chef.findById(chefId);
@@ -179,7 +180,6 @@ const registerChef = async (req, res, next) => { // <-- ¡Asegúrate de tener 'n
     tournament.participants.push(chefId);
     await tournament.save();
 
-    // Devolvemos el torneo actualizado y poblado
     const updatedTournament = await Tournament.findById(id)
       .populate('participants', 'name specialty')
       .populate({
@@ -201,14 +201,13 @@ const submitScore = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ 
         message: 'ID de torneo inválido' 
       });
     }
 
-    const { chefId, score } = req.body; // Aquí mantenemos el body, asumiendo que un admin puede poner notas
+    const { chefId, score } = req.body;
 
     if (score === undefined || score === null) {
       return res.status(400).json({ message: 'El puntaje (score) es obligatorio' });
@@ -252,8 +251,7 @@ const getRanking = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ 
         message: 'ID de torneo inválido' 
       });

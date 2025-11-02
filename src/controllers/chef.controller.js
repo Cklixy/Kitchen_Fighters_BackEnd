@@ -1,283 +1,238 @@
-// src/controllers/chef.controller.js
-
 const Chef = require('../models/chef.model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto'); // <-- AÑADIDO
-const mailer = require('../config/mailer'); // <-- AÑADIDO
+const crypto = require('crypto');
+const mailer = require('../config/mailer');
 
-// --- Crear un nuevo Chef (POST /) ---
+const ensureRole = (chefObj) => {
+  if (!chefObj.role) {
+    chefObj.role = 'user';
+  }
+  return chefObj;
+};
+
 const createChef = async (req, res, next) => {
-  try {
-    const { name, specialty, experienceYears, email, password } = req.body;
+  try {
+    const { name, specialty, experienceYears, email, password } = req.body;
 
-    if (!password || password.length < 6) {
-      return res.status(400).json({
-        message: 'La contraseña es obligatoria y debe tener al menos 6 caracteres',
-      });
-    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        message: 'La contraseña es obligatoria y debe tener al menos 6 caracteres',
+      });
+    }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newChef = new Chef({
-      name,
-      specialty,
-      experienceYears,
-      email,
-      password: hashedPassword,
-    });
+    const newChef = new Chef({
+      name,
+      specialty,
+      experienceYears,
+      email,
+      password: hashedPassword,
+    });
 
-    const savedChef = await newChef.save();
+    const savedChef = await newChef.save();
+    const chefResponse = savedChef.toObject();
+    delete chefResponse.password;
 
-    const chefResponse = savedChef.toObject();
-    delete chefResponse.password;
-
-    res.status(201).json(chefResponse);
-  } catch (err) {
-    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
-      return res.status(409).json({
-        message: `El correo electrónico '${err.keyValue.email}' ya está en uso.`,
-      });
-    }
-    next(err);
-  }
+    res.status(201).json(chefResponse);
+  } catch (err) {
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      return res.status(409).json({
+        message: `El correo electrónico '${err.keyValue.email}' ya está en uso.`,
+      });
+    }
+    next(err);
+  }
 };
 
-// --- Iniciar Sesión (Login) (POST /login) ---
 const loginChef = async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Por favor ingrese correo y contraseña' });
-    }
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Por favor ingrese correo y contraseña' });
+    }
 
-    const chef = await Chef.findOne({ email }).select('+password');
+    const chef = await Chef.findOne({ email }).select('+password');
 
-    if (!chef) {
-      return res.status(401).json({ message: 'Credenciales inválidas' });
-    }
+    if (!chef) {
+      return res.status(401).json({ message: 'Credenciales inválidas' });
+    }
 
-    const isMatch = await bcrypt.compare(password, chef.password);
+    const isMatch = await bcrypt.compare(password, chef.password);
 
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Credenciales inválidas' });
-    }
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Credenciales inválidas' });
+    }
 
-    const payload = {
-      id: chef._id,
-      name: chef.name
-    };
+    const payload = {
+      id: chef._id,
+      name: chef.name
+    };
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: '1h'
-    });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: '1h'
+    });
 
-    const chefResponse = chef.toObject();
-    delete chefResponse.password;
-    
-    // Asegurar que el campo role esté presente (usar default si no existe)
-    if (!chefResponse.role) {
-      chefResponse.role = 'user';
-    }
+    const chefResponse = ensureRole(chef.toObject());
+    delete chefResponse.password;
 
-    res.status(200).json({
-      token,
-      chef: chefResponse
-    });
+    res.status(200).json({
+      token,
+      chef: chefResponse
+    });
 
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) {
+    next(err);
+  }
 };
 
-// --- Obtener mi perfil actual (GET /me) ---
 const getMyProfile = async (req, res, next) => {
-  try {
-    // Obtener el chef completo desde la BD para asegurar todos los campos
-    const chef = await Chef.findById(req.chef._id || req.chef.id);
-    
-    if (!chef) {
-      return res.status(404).json({ message: 'Chef no encontrado' });
-    }
+  try {
+    const chef = await Chef.findById(req.chef._id || req.chef.id);
+    
+    if (!chef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
 
-    // Asegurar que el campo role esté presente (usar default si no existe)
-    const chefResponse = chef.toObject();
-    delete chefResponse.password;
-    if (!chefResponse.role) {
-      chefResponse.role = 'user';
-    }
-    
-    res.status(200).json(chefResponse);
-  } catch (err) {
-    next(err);
-  }
+    const chefResponse = ensureRole(chef.toObject());
+    delete chefResponse.password;
+    
+    res.status(200).json(chefResponse);
+  } catch (err) {
+    next(err);
+  }
 };
 
-// --- ¡NUEVA FUNCIÓN! Actualizar Perfil (PUT /profile) ---
 const updateMyProfile = async (req, res, next) => {
-  try {
-    // 1. Buscamos al chef usando el ID que nuestro 'authMiddleware' puso en 'req.chef'
-    const chef = await Chef.findById(req.chef.id);
+  try {
+    const chef = await Chef.findById(req.chef.id);
 
-    if (!chef) {
-      return res.status(404).json({ message: 'Chef no encontrado' });
-    }
+    if (!chef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
 
-    // 2. Actualizamos los campos que vengan en la petición
-    if (req.body.description) {
-      chef.description = req.body.description;
-    }
-    if (req.body.specialty) {
-      chef.specialty = req.body.specialty;
-    }
-    if (req.body.experienceYears) {
-      chef.experienceYears = req.body.experienceYears;
-    }
+    if (req.body.description) chef.description = req.body.description;
+    if (req.body.specialty) chef.specialty = req.body.specialty;
+    if (req.body.experienceYears) chef.experienceYears = req.body.experienceYears;
 
-    // 3. Si 'multer' procesó un archivo, 'req.file' existirá
-    if (req.file) {
-      // Guardamos la ruta de la imagen (ej: "uploads/chef-12345.jpg")
-      // Reemplazamos '\' por '/' para compatibilidad web
-      chef.profileImageUrl = req.file.path.replace(/\\/g, '/');
-    }
+    if (req.file) {
+      chef.profileImageUrl = req.file.path.replace(/\\/g, '/');
+    }
 
-    const updatedChef = await chef.save();
+    const updatedChef = await chef.save();
+    const chefResponse = updatedChef.toObject();
+    delete chefResponse.password;
 
-    // 4. Devolvemos el chef actualizado (sin contraseña)
-    const chefResponse = updatedChef.toObject();
-    delete chefResponse.password;
+    res.status(200).json(chefResponse);
 
-    res.status(200).json(chefResponse);
-
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) {
+    next(err);
+  }
 };
 
-
-// --- Listar todos los Chefs (GET /) ---
 const listChefs = async (req, res, next) => {
-  try {
-    const chefs = await Chef.find().select('-password -email');
-    res.status(200).json(chefs);
-  } catch (err) {
-    next(err);
-  }
+  try {
+    const chefs = await Chef.find().select('-password -email');
+    res.status(200).json(chefs);
+  } catch (err) {
+    next(err);
+  }
 };
 
-// --- Obtener un Chef por ID (GET /:id) ---
 const getChef = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const chef = await Chef.findById(id).select('-password');
+  try {
+    const { id } = req.params;
+    const chef = await Chef.findById(id).select('-password');
 
-    if (!chef) {
-      return res.status(404).json({ message: 'Chef no encontrado' });
-    }
+    if (!chef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
 
-    // Asegurar que el campo role esté presente (usar default si no existe)
-    const chefResponse = chef.toObject();
-    if (!chefResponse.role) {
-      chefResponse.role = 'user';
-    }
-
-    res.status(200).json(chefResponse);
-  } catch (err) {
-    next(err);
-  }
+    const chefResponse = ensureRole(chef.toObject());
+    res.status(200).json(chefResponse);
+  } catch (err) {
+    next(err);
+  }
 };
 
-// --- Actualizar un Chef (PUT /:id) (Esta es para un Admin, la dejamos) ---
 const updateChef = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { password, ...updates } = req.body;
+  try {
+    const { id } = req.params;
+    const { password, ...updates } = req.body;
 
-    if (password) {
-      if (password.length < 6) {
-        return res.status(400).json({
-          message: 'La contraseña debe tener al menos 6 caracteres',
-        });
-      }
-      const salt = await bcrypt.genSalt(10);
-      updates.password = await bcrypt.hash(password, salt);
-    }
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({
+          message: 'La contraseña debe tener al menos 6 caracteres',
+        });
+      }
+      const salt = await bcrypt.genSalt(10);
+      updates.password = await bcrypt.hash(password, salt);
+    }
 
-    const updatedChef = await Chef.findByIdAndUpdate(id, updates, {
-      new: true,
-      runValidators: true,
-    }).select('-password');
+    const updatedChef = await Chef.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true,
+    }).select('-password');
 
-    if (!updatedChef) {
-      return res.status(404).json({ message: 'Chef no encontrado' });
-    }
+    if (!updatedChef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
 
-    res.status(200).json(updatedChef);
-  } catch (err) {
-    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
-      return res.status(409).json({
-        message: `El correo electrónico '${err.keyValue.email}' ya está en uso.`,
-      });
-    }
-    next(err);
-  }
+    res.status(200).json(updatedChef);
+  } catch (err) {
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      return res.status(409).json({
+        message: `El correo electrónico '${err.keyValue.email}' ya está en uso.`,
+      });
+    }
+    next(err);
+  }
 };
 
-// --- Eliminar un Chef (DELETE /:id) ---
 const deleteChef = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const deletedChef = await Chef.findByIdAndDelete(id);
+  try {
+    const { id } = req.params;
+    const deletedChef = await Chef.findByIdAndDelete(id);
 
-    if (!deletedChef) {
-      return res.status(404).json({ message: 'Chef no encontrado' });
-    }
-    
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
+    if (!deletedChef) {
+      return res.status(404).json({ message: 'Chef no encontrado' });
+    }
+    
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
 };
 
-
-// --- ¡¡INICIO DE CÓDIGO AÑADIDO!! ---
-
-/**
- * @desc    Solicitar reseteo de contraseña
- * @route   POST /api/chefs/forgot-password
- * @access  Public
- */
 const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
     const chef = await Chef.findOne({ email });
 
-    // Por seguridad, no revelamos si el email existe o no.
-    // Siempre enviamos una respuesta positiva.
     if (!chef) {
       console.log(`Solicitud de reseteo para email no encontrado: ${email}`);
-      return res.status(200).json({ message: 'Si el correo está registrado, recibirás un enlace de reseteo.' });
+      return res.status(200).json({ 
+        message: 'Si el correo está registrado, recibirás un enlace de reseteo.' 
+      });
     }
 
-    // 1. Generar un token aleatorio
     const resetToken = crypto.randomBytes(20).toString('hex');
 
-    // 2. Hashear el token y guardarlo en la BD junto con la expiración (1 hora)
     chef.resetPasswordToken = crypto
       .createHash('sha256')
       .update(resetToken)
       .digest('hex');
-    chef.resetPasswordExpires = Date.now() + 3600000; // 1 hora
+    chef.resetPasswordExpires = Date.now() + 3600000;
 
     await chef.save();
     console.log(`Token de reseteo generado para: ${chef.email}`);
 
-    // 3. Crear el enlace de reseteo (apuntando al FRONTEND)
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // 4. Crear el mensaje de email
     const message = {
       from: `"Kitchen Fighters" <${process.env.EMAIL_USER}>`,
       to: chef.email,
@@ -292,15 +247,15 @@ const forgotPassword = async (req, res, next) => {
       `
     };
 
-    // 5. Enviar el email
     await mailer.sendMail(message);
     console.log(`Email de reseteo enviado a: ${chef.email}`);
 
-    res.status(200).json({ message: 'Si el correo está registrado, recibirás un enlace de reseteo.' });
+    res.status(200).json({ 
+      message: 'Si el correo está registrado, recibirás un enlace de reseteo.' 
+    });
 
   } catch (err) {
     console.error('Error en forgotPassword:', err);
-    // Limpiar token si algo falló para que el usuario pueda reintentar
     try {
       if (req.body.email) {
         const chef = await Chef.findOne({ email: req.body.email });
@@ -317,48 +272,45 @@ const forgotPassword = async (req, res, next) => {
   }
 };
 
-/**
- * @desc    Restablecer la contraseña
- * @route   POST /api/chefs/reset-password/:token
- * @access  Public
- */
 const resetPassword = async (req, res, next) => {
   try {
     const { password } = req.body;
     const { token } = req.params;
 
     if (!password || password.length < 6) {
-      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' });
+      return res.status(400).json({ 
+        message: 'La contraseña debe tener al menos 6 caracteres' 
+      });
     }
 
-    // 1. Hashear el token que viene del enlace
     const hashedToken = crypto
       .createHash('sha256')
       .update(token)
       .digest('hex');
 
-    // 2. Buscar al usuario por el token hasheado Y que no esté expirado
     const chef = await Chef.findOne({
       resetPasswordToken: hashedToken,
-      resetPasswordExpires: { $gt: Date.now() } // $gt = greater than (mayor que)
+      resetPasswordExpires: { $gt: Date.now() }
     });
 
     if (!chef) {
-      return res.status(400).json({ message: 'El enlace de reseteo es inválido o ha expirado.' });
+      return res.status(400).json({ 
+        message: 'El enlace de reseteo es inválido o ha expirado.' 
+      });
     }
 
-    // 3. Hashear la nueva contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 4. Actualizar contraseña e invalidar el token
     chef.password = hashedPassword;
     chef.resetPasswordToken = undefined;
     chef.resetPasswordExpires = undefined;
     await chef.save();
 
     console.log(`Contraseña actualizada para: ${chef.email}`);
-    res.status(200).json({ message: '¡Contraseña actualizada! Ya puedes iniciar sesión.' });
+    res.status(200).json({ 
+      message: '¡Contraseña actualizada! Ya puedes iniciar sesión.' 
+    });
 
   } catch (err) {
     console.error('Error en resetPassword:', err);
@@ -366,19 +318,15 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
-// --- FIN DE CÓDIGO AÑADIDO ---
-
-
-// --- Exportaciones ---
 module.exports = {
-  createChef,
-  loginChef,
-  getMyProfile,
-  updateMyProfile,
-  listChefs,
-  getChef,
-  updateChef,
-  deleteChef,
-  forgotPassword, // <-- AÑADIDO
-  resetPassword   // <-- AÑADIDO
+  createChef,
+  loginChef,
+  getMyProfile,
+  updateMyProfile,
+  listChefs,
+  getChef,
+  updateChef,
+  deleteChef,
+  forgotPassword,
+  resetPassword
 };
