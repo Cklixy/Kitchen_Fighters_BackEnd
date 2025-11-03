@@ -301,18 +301,50 @@ const updateTournamentResults = async (req, res, next) => {
 };
 
 
-// --- FUNCIONES ADICIONALES (ya existentes) ---
-const changeUserRole = async (req, res, next) => { 
-  return setChefRole(req, res, next);
+const changeUserRole = async (req, res, next) => {
+  try {
+    const { role } = req.body;
+    if (role !== 'admin' && role !== 'user') {
+      return res.status(400).json({ 
+        message: 'Rol inválido. Solo se permite "admin" o "user".' 
+      });
+    }
+    const chef = await Chef.findByIdAndUpdate(
+      req.params.id,
+      { role },
+      { new: true }
+    ).select('-password');
+    
+    if (!chef) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    res.status(200).json(chef);
+  } catch (error) {
+    next(error);
+  }
 };
+
 const getAllUsers = async (req, res, next) => {
-  return getChefs(req, res, next);
+  try {
+    const chefs = await Chef.find().select('-password');
+    const chefsWithRole = chefs.map(chef => {
+      const chefObj = chef.toObject();
+      if (!chefObj.role) {
+        chefObj.role = 'user';
+      }
+      return chefObj;
+    });
+    res.status(200).json(chefsWithRole);
+  } catch (error) {
+    next(error);
+  }
 };
+
 const getUserById = async (req, res, next) => {
   try {
     const chef = await Chef.findById(req.params.id).select('-password');
     if (!chef) {
-      return res.status(404).json({ message: 'Chef no encontrado' });
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
     const chefObj = chef.toObject();
     if (!chefObj.role) {

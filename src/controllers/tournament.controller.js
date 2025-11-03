@@ -96,10 +96,15 @@ const getTournamentById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || id === 'undefined') {
       return res.status(400).json({ 
-        message: 'ID de torneo inválido' 
+        message: 'ID de torneo requerido. El ID no puede ser undefined.' 
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido. El formato del ID no es válido.' 
       });
     }
 
@@ -145,9 +150,15 @@ const registerChef = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || id === 'undefined') {
       return res.status(400).json({ 
-        message: 'ID de torneo inválido' 
+        message: 'ID de torneo requerido. El ID no puede ser undefined.' 
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido. El formato del ID no es válido.' 
       });
     }
     
@@ -249,9 +260,15 @@ const submitScore = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || id === 'undefined') {
       return res.status(400).json({ 
-        message: 'ID de torneo inválido' 
+        message: 'ID de torneo requerido. El ID no puede ser undefined.' 
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido. El formato del ID no es válido.' 
       });
     }
 
@@ -299,9 +316,15 @@ const getRanking = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || id === 'undefined') {
       return res.status(400).json({ 
-        message: 'ID de torneo inválido' 
+        message: 'ID de torneo requerido. El ID no puede ser undefined.' 
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        message: 'ID de torneo inválido. El formato del ID no es válido.' 
       });
     }
 
